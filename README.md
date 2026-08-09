@@ -41,6 +41,8 @@ Join the official **TorioGhost Client** community for questions, updates, and mo
 
 **Discord Invite:** [discord.gg/xq8sWQhuXG](https://discord.gg/xq8sWQhuXG)
 
+**Looking for the full client?** Check out the **[TorioGhost Client](https://github.com/Uncle-Awrt/Torio-Client)**!
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
