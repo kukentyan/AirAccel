@@ -6,6 +6,8 @@
 AirAccel for Minecraft Bedrock Edition (MCBE) 26.30 ~ 26.42.
 A tool to customize the air acceleration in Minecraft.
 
+![Screenshot](image.png)
+
 ## ✨ Features
 
 - **Automatic Process Monitoring & Reconnection**
@@ -44,4 +46,4 @@ Join the official **TorioGhost Client** community for questions, updates, and mo
 This project is licensed under the [MIT License](LICENSE).
 
 ---
-*Made by Ducky*
+*Requested by q6hc | Made by Ducky*
