@@ -1,5 +1,8 @@
 # AirAccel
 
+[![GitHub Downloads (total)](https://img.shields.io/github/downloads/kukentyan/AirAccel/total?color=pink)](https://github.com/kukentyan/AirAccel/releases/latest)
+[![Discord](https://img.shields.io/discord/1447408228798304359?logo=discord&label=Discord&color=5865f2)](https://discord.gg/xq8sWQhuXG)
+
 AirAccel for Minecraft Bedrock Edition (MCBE) 26.30 ~ 26.42.
 A tool to customize the air acceleration in Minecraft.
 
