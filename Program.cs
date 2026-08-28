@@ -94,7 +94,7 @@ namespace AirAccel
         private static IntPtr _airAccelAddress = IntPtr.Zero;
         private static byte[]? _airAccelOriginalBytes = null;
         private static IntPtr _airAccelAllocated = IntPtr.Zero;
-        private const float AirAccelBaseValue = 0.02f;
+        private const int MultiplierOffset = 0x30;
         private static Mutex? _appMutex;
         private static readonly string MutexName = "AirAccel-{B9C8E7F6-D1A2-4B3C-9F8E-7D6C5B4A3921}";
         private static float _currentMultiplier = 1.0f;
@@ -301,12 +301,11 @@ namespace AirAccel
 
         private static bool ApplyAirAcceleration(float multiplier)
         {
-            float finalValue = AirAccelBaseValue * Math.Clamp(multiplier, 0.1f, 10.0f);
+            float clampedMultiplier = Math.Clamp(multiplier, 0.1f, 10.0f);
 
             if (_airAccelAllocated != IntPtr.Zero)
             {
-                WriteBytes((IntPtr)(_airAccelAllocated.ToInt64() + 4), BitConverter.GetBytes(finalValue));
-                return true;
+                return WriteProtectedBytes((IntPtr)(_airAccelAllocated.ToInt64() + MultiplierOffset), BitConverter.GetBytes(clampedMultiplier));
             }
 
             int instrLen = 6;
@@ -319,9 +318,18 @@ namespace AirAccel
             _airAccelAllocated = AllocateNear(_airAccelAddress, 0x100);
             if (_airAccelAllocated == IntPtr.Zero) return false;
 
+            IntPtr mulAddr = (IntPtr)(_airAccelAllocated.ToInt64() + MultiplierOffset);
+            WriteProtectedBytes(mulAddr, BitConverter.GetBytes(clampedMultiplier));
+
             var sc = new List<byte>();
-            sc.AddRange(new byte[] { 0x41, 0xC7, 0x40, 0x0C });
-            sc.AddRange(BitConverter.GetBytes(finalValue));
+            // mulss xmm0, [mulAddr] (RIP-relative)
+            sc.AddRange(new byte[] { 0xF3, 0x0F, 0x59, 0x05 });
+            long ripAfterMul = _airAccelAllocated.ToInt64() + sc.Count + 4;
+            long offMul = mulAddr.ToInt64() - ripAfterMul;
+            sc.AddRange(BitConverter.GetBytes((int)offMul));
+
+            // movss [r8+0Ch], xmm0 (original instruction)
+            sc.AddRange(new byte[] { 0xF3, 0x41, 0x0F, 0x11, 0x40, 0x0C });
 
             long retAddr = _airAccelAddress.ToInt64() + instrLen;
             long jmpBack = retAddr - (_airAccelAllocated.ToInt64() + sc.Count + 5);
