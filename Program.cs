@@ -94,7 +94,6 @@ namespace AirAccel
         private static IntPtr _airAccelAddress = IntPtr.Zero;
         private static byte[]? _airAccelOriginalBytes = null;
         private static IntPtr _airAccelAllocated = IntPtr.Zero;
-        private const float AirAccelBaseValue = 0.02f;
         private static Mutex? _appMutex;
         private static readonly string MutexName = "AirAccel-{B9C8E7F6-D1A2-4B3C-9F8E-7D6C5B4A3921}";
         private static float _currentMultiplier = 1.0f;
@@ -237,8 +236,8 @@ namespace AirAccel
             {
                 Console.Clear();
                 Console.WriteLine("\nHide: RSHIFT");
-                Console.WriteLine($"Air (Ex: 1.02): {_currentMultiplier}\n");
-                Console.Write("Enter Air Accel: ");
+                Console.WriteLine($"Multiplier (Ex: 1.0): {_currentMultiplier}\n");
+                Console.Write("Enter Air Accel Multiplier: ");
                 
                 string? input = Console.ReadLine();
                 if (input == null)
@@ -301,11 +300,9 @@ namespace AirAccel
 
         private static bool ApplyAirAcceleration(float multiplier)
         {
-            float finalValue = AirAccelBaseValue * Math.Clamp(multiplier, 0.1f, 10.0f);
-
             if (_airAccelAllocated != IntPtr.Zero)
             {
-                WriteBytes((IntPtr)(_airAccelAllocated.ToInt64() + 4), BitConverter.GetBytes(finalValue));
+                WriteBytes(_airAccelAllocated, BitConverter.GetBytes(multiplier));
                 return true;
             }
 
@@ -319,20 +316,33 @@ namespace AirAccel
             _airAccelAllocated = AllocateNear(_airAccelAddress, 0x100);
             if (_airAccelAllocated == IntPtr.Zero) return false;
 
-            var sc = new List<byte>();
-            sc.AddRange(new byte[] { 0x41, 0xC7, 0x40, 0x0C });
-            sc.AddRange(BitConverter.GetBytes(finalValue));
+            // Write initial multiplier (at offset 0) and original value placeholder (at offset 4)
+            WriteBytes(_airAccelAllocated, BitConverter.GetBytes(multiplier));
+            WriteBytes(new IntPtr(_airAccelAllocated.ToInt64() + 4), BitConverter.GetBytes(0.0f));
 
+            var sc = new List<byte>();
+
+            // 1. movss [rip + disp_orig], xmm0 -> F3 0F 11 05 EC FF FF FF (writes to offset 0x04)
+            sc.AddRange(new byte[] { 0xF3, 0x0F, 0x11, 0x05, 0xEC, 0xFF, 0xFF, 0xFF });
+
+            // 2. mulss xmm0, [rip + disp_mult] -> F3 0F 59 05 E0 FF FF FF (reads from offset 0x00)
+            sc.AddRange(new byte[] { 0xF3, 0x0F, 0x59, 0x05, 0xE0, 0xFF, 0xFF, 0xFF });
+
+            // 3. movss [r8+0Ch], xmm0 -> F3 41 0F 11 40 0C
+            sc.AddRange(new byte[] { 0xF3, 0x41, 0x0F, 0x11, 0x40, 0x0C });
+
+            // 4. jmp back to original instruction + 6
             long retAddr = _airAccelAddress.ToInt64() + instrLen;
-            long jmpBack = retAddr - (_airAccelAllocated.ToInt64() + sc.Count + 5);
+            long jmpBack = retAddr - (_airAccelAllocated.ToInt64() + 0x10 + sc.Count + 5);
             if (jmpBack < int.MinValue || jmpBack > int.MaxValue) return false;
             
             sc.Add(0xE9);
             sc.AddRange(BitConverter.GetBytes((int)jmpBack));
 
-            if (!WriteBytes(_airAccelAllocated, sc.ToArray())) return false;
+            // Write the shellcode starting at offset 0x10 to avoid overwriting variables at offsets 0x00 and 0x04
+            if (!WriteBytes(new IntPtr(_airAccelAllocated.ToInt64() + 0x10), sc.ToArray())) return false;
 
-            long rel = _airAccelAllocated.ToInt64() - (_airAccelAddress.ToInt64() + 5);
+            long rel = (_airAccelAllocated.ToInt64() + 0x10) - (_airAccelAddress.ToInt64() + 5);
             if (rel < int.MinValue || rel > int.MaxValue) return false;
 
             var patch = new byte[instrLen];
